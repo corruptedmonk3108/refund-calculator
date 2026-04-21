@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Entry Summary Refund Calculator</title>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f7fa;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.10);
+      padding: 40px 44px;
+      width: 100%;
+      max-width: 560px;
+    }
+
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 32px;
+      line-height: 1.5;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed #d0d5dd;
+      border-radius: 10px;
+      padding: 36px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      background: #fafafa;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: #4f46e5;
+      background: #f0efff;
+    }
+    .drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon {
+      font-size: 36px;
+      margin-bottom: 10px;
+    }
+
+    .drop-label {
+      font-size: 14px;
+      color: #444;
+      font-weight: 500;
+    }
+    .drop-label span {
+      color: #4f46e5;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .drop-hint {
+      font-size: 12px;
+      color: #999;
+      margin-top: 6px;
+    }
+
+    .file-chosen {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #4f46e5;
+      font-weight: 500;
+      min-height: 18px;
+    }
+
+    /* Button */
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 24px;
+      padding: 13px;
+      background: #4f46e5;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s;
+    }
+    .btn:hover:not(:disabled) { background: #4338ca; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Status / result */
+    .status {
+      margin-top: 20px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+      display: none;
+    }
+    .status.error   { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .status.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .status.info    { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+
+    .download-btn {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 10px 20px;
+      background: #16a34a;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .download-btn:hover { background: #15803d; }
+
+    .summary-stats {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #555;
+    }
+    .summary-stats b { color: #111; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>Entry Summary Refund Calculator</h1>
+  <p class="subtitle">
+    Upload an Entry Summary Line Tariff Details Excel file.<br>
+    The tool calculates refund-eligible duty amounts and exports a CSV.
+  </p>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    <div class="drop-icon">📂</div>
+    <div class="drop-label"><span>Choose a file</span> or drag it here</div>
+    <div class="drop-hint">Accepts .xlsx / .xls files</div>
+  </div>
+  <div class="file-chosen" id="fileChosen"></div>
+
+  <button class="btn" id="processBtn" disabled>Calculate Refunds</button>
+
+  <div class="status" id="statusBox"></div>
+</div>
+
+<script>
+// ─── Excluded HTS codes ───────────────────────────────────────────────────────
+const EXCLUDED_HTS = new Set([
+  "9903.81.87","9903.81.88","9903.81.89","9903.81.90","9903.81.91",
+  "9903.81.92","9903.81.93",
+  "9903.85.02","9903.85.04","9903.85.07","9903.85.08","9903.85.09",
+  "9903.94.01","9903.94.05",
+  "9903.76.02",
+  "9903.88.01","9903.88.02","9903.88.03","9903.88.04","9903.88.69","9903.88.70",
+  "9903.74.01","9903.74.03","9903.74.02","9903.74.08","9903.74.09"
+].map(normalizeHTS));
+
+// Normalize: remove dots, uppercase, trim. Converts "9903.81.87" → "9903818700" (10 chars, zero-padded).
+function normalizeHTS(raw) {
+  if (raw == null) return "";
+  const s = String(raw).replace(/\./g, "").trim().toUpperCase();
+  return s.padEnd(10, "0");
+}
+
+// ─── Eligible entry types ─────────────────────────────────────────────────────
+const ELIGIBLE_ENTRY_TYPES = new Set(["01", "21", "31"]);
+
+function normalizeEntryType(raw) {
+  if (raw == null) return "";
+  return String(raw).trim().padStart(2, "0");
+}
+
+// ─── Core calculation ─────────────────────────────────────────────────────────
+function calculate(rows) {
+  // rows: array of objects keyed by header names
+  const refundMap = new Map(); // Entry Summary Number → refund total
+
+  for (const row of rows) {
+    const htsRaw    = row["HTS Number - Full"];
+    const goodsVal  = Number(row["Line Tariff Goods Value Amount"]);
+    const dutyAmt   = Number(row["Line Tariff Duty Amount"]);
+    const entryType = normalizeEntryType(row["Entry Type Code"]);
+    const entryNum  = row["Entry Summary Number"];
+
+    // Condition 4: Entry Type must be 01, 21, or 31
+    if (!ELIGIBLE_ENTRY_TYPES.has(entryType)) continue;
+
+    // Condition 2: Goods Value must be exactly 0
+    if (goodsVal !== 0) continue;
+
+    // Condition 3: Duty Amount must be > 0
+    if (!(dutyAmt > 0)) continue;
+
+    // Condition 1: HTS starts with "99" and is not in the excluded list
+    const htsNorm = normalizeHTS(htsRaw);
+    if (!htsNorm.startsWith("99")) continue;
+    if (EXCLUDED_HTS.has(htsNorm)) continue;
+
+    // This row qualifies — add duty to the entry's refund total
+    const prev = refundMap.get(entryNum) || 0;
+    refundMap.set(entryNum, prev + dutyAmt);
+  }
+
+  return refundMap;
+}
+
+// ─── CSV builder ──────────────────────────────────────────────────────────────
+function buildCSV(refundMap) {
+  const lines = ["Entry Summary Number,Refund"];
+  for (const [entryNum, refund] of refundMap.entries()) {
+    // Quote entry number in case it contains commas
+    const safeNum = `"${String(entryNum).replace(/"/g, '""')}"`;
+    lines.push(`${safeNum},${refund.toFixed(2)}`);
+  }
+  return lines.join("\r\n");
+}
+
+function triggerDownload(csv, filename) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+// ─── UI wiring ────────────────────────────────────────────────────────────────
+const dropZone   = document.getElementById("dropZone");
+const fileInput  = document.getElementById("fileInput");
+const fileChosen = document.getElementById("fileChosen");
+const processBtn = document.getElementById("processBtn");
+const statusBox  = document.getElementById("statusBox");
+
+let selectedFile = null;
+let lastCSV      = null;
+let lastFilename  = null;
+
+function setFile(file) {
+  if (!file) return;
+  selectedFile = file;
+  fileChosen.textContent = `Selected: ${file.name}`;
+  processBtn.disabled = false;
+  clearStatus();
+}
+
+fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+
+dropZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file) { fileInput.files = e.dataTransfer.files; setFile(file); }
+});
+
+function showStatus(type, html) {
+  statusBox.className = `status ${type}`;
+  statusBox.style.display = "block";
+  statusBox.innerHTML = html;
+}
+function clearStatus() {
+  statusBox.style.display = "none";
+  statusBox.innerHTML = "";
+}
+
+processBtn.addEventListener("click", () => {
+  if (!selectedFile) return;
+
+  showStatus("info", "Processing file…");
+  processBtn.disabled = true;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb   = XLSX.read(data, { type: "array" });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
+
+      if (rows.length === 0) {
+        showStatus("error", "The file appears to be empty or has no data rows.");
+        processBtn.disabled = false;
+        return;
+      }
+
+      // Validate required columns exist
+      const required = [
+        "Entry Summary Number","Entry Type Code","HTS Number - Full",
+        "Line Tariff Goods Value Amount","Line Tariff Duty Amount"
+      ];
+      const headers = Object.keys(rows[0]);
+      const missing = required.filter(h => !headers.includes(h));
+      if (missing.length > 0) {
+        showStatus("error", `Missing required columns:<br><b>${missing.join(", ")}</b>`);
+        processBtn.disabled = false;
+        return;
+      }
+
+      const refundMap = calculate(rows);
+      const csv       = buildCSV(refundMap);
+
+      const baseName  = selectedFile.name.replace(/\.[^.]+$/, "");
+      lastFilename    = `${baseName}_Refunds.csv`;
+      lastCSV         = csv;
+
+      const entryCount  = refundMap.size;
+      const totalRefund = [...refundMap.values()].reduce((a, b) => a + b, 0);
+
+      showStatus("success", `
+        <strong>Calculation complete.</strong><br>
+        <div class="summary-stats">
+          Eligible entries: <b>${entryCount}</b> &nbsp;|&nbsp;
+          Total refund: <b>$${totalRefund.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
+        </div>
+        <button class="download-btn" id="dlBtn">⬇ Download CSV</button>
+      `);
+
+      document.getElementById("dlBtn").addEventListener("click", () => {
+        triggerDownload(lastCSV, lastFilename);
+      });
+
+    } catch (err) {
+      showStatus("error", `Failed to process file: ${err.message}`);
+    }
+
+    processBtn.disabled = false;
+  };
+
+  reader.onerror = () => {
+    showStatus("error", "Could not read the file. Please try again.");
+    processBtn.disabled = false;
+  };
+
+  reader.readAsArrayBuffer(selectedFile);
+});
+</script>
+</body>
+</html>
