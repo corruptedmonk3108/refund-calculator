@@ -41,7 +41,6 @@
       line-height: 1.5;
     }
 
-    /* Drop zone */
     .drop-zone {
       border: 2px dashed #d0d5dd;
       border-radius: 10px;
@@ -65,27 +64,12 @@
       height: 100%;
     }
 
-    .drop-icon {
-      font-size: 36px;
-      margin-bottom: 10px;
-    }
+    .drop-icon { font-size: 36px; margin-bottom: 10px; }
 
-    .drop-label {
-      font-size: 14px;
-      color: #444;
-      font-weight: 500;
-    }
-    .drop-label span {
-      color: #4f46e5;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
+    .drop-label { font-size: 14px; color: #444; font-weight: 500; }
+    .drop-label span { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
 
-    .drop-hint {
-      font-size: 12px;
-      color: #999;
-      margin-top: 6px;
-    }
+    .drop-hint { font-size: 12px; color: #999; margin-top: 6px; }
 
     .file-chosen {
       margin-top: 12px;
@@ -95,7 +79,6 @@
       min-height: 18px;
     }
 
-    /* Button */
     .btn {
       display: block;
       width: 100%;
@@ -113,7 +96,6 @@
     .btn:hover:not(:disabled) { background: #4338ca; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
-    /* Status / result */
     .status {
       margin-top: 20px;
       padding: 14px 16px;
@@ -142,11 +124,7 @@
     }
     .download-btn:hover { background: #15803d; }
 
-    .summary-stats {
-      margin-top: 10px;
-      font-size: 12px;
-      color: #555;
-    }
+    .summary-stats { margin-top: 10px; font-size: 12px; color: #555; }
     .summary-stats b { color: #111; }
   </style>
 </head>
@@ -155,7 +133,7 @@
   <h1>Entry Summary Refund Calculator</h1>
   <p class="subtitle">
     Upload an Entry Summary Line Tariff Details Excel file.<br>
-    The tool calculates refund-eligible duty amounts and exports a CSV.
+    The tool produces a 3-sheet Excel workbook: refund summary, line detail, and non-refundable lines.
   </p>
 
   <div class="drop-zone" id="dropZone">
@@ -172,23 +150,93 @@
 </div>
 
 <script>
-// ─── Excluded HTS codes ───────────────────────────────────────────────────────
-const EXCLUDED_HTS = new Set([
-  "9903.81.87","9903.81.88","9903.81.89","9903.81.90","9903.81.91",
-  "9903.81.92","9903.81.93",
-  "9903.85.02","9903.85.04","9903.85.07","9903.85.08","9903.85.09",
-  "9903.94.01","9903.94.05",
-  "9903.76.02",
-  "9903.88.01","9903.88.02","9903.88.03","9903.88.04","9903.88.69","9903.88.70",
-  "9903.74.01","9903.74.03","9903.74.02","9903.74.08","9903.74.09",
-  "9903.03.01"
-].map(normalizeHTS));
+// ─── Baked-in eligibility reference data ──────────────────────────────────────
+const ELIGIBLE_RAW = [{"code":"9903.01.01","authority":"IEEPA (Mexico)","whyRefundable":"Imposed under IEEPA via EO 14194 (as amended); struck down by Supreme Court V.O.S. Selections v. US (Feb 20, 2026)"},{"code":"9903.01.02","authority":"IEEPA (Mexico)","whyRefundable":"Imposed under IEEPA via EO 14194 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.03","authority":"IEEPA (Mexico)","whyRefundable":"Imposed under IEEPA via EO 14194 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.04","authority":"IEEPA (Mexico)","whyRefundable":"Imposed under IEEPA via EO 14194 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.05","authority":"IEEPA (Mexico)","whyRefundable":"Imposed under IEEPA via EO 14194 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.10","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.11","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.12","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.13","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.14","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.15","authority":"IEEPA (Canada)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.16","authority":"IEEPA (Canada - Energy)","whyRefundable":"Imposed under IEEPA via EO 14193 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.20","authority":"IEEPA (China - Fentanyl)","whyRefundable":"Imposed under IEEPA via EO 14195 / EO 14228; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.21","authority":"IEEPA (China - Fentanyl)","whyRefundable":"Imposed under IEEPA via EO 14195 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.22","authority":"IEEPA (China - Fentanyl)","whyRefundable":"Imposed under IEEPA via EO 14195 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.23","authority":"IEEPA (China - Fentanyl)","whyRefundable":"Imposed under IEEPA via EO 14195 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.24","authority":"IEEPA (China - Fentanyl)","whyRefundable":"Imposed under IEEPA via EO 14195 / EO 14228 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.25","authority":"IEEPA (Reciprocal Baseline)","whyRefundable":"Imposed under IEEPA via EO 14257; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.26","authority":"IEEPA (Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.27","authority":"IEEPA (Reciprocal - Mexico exc.)","whyRefundable":"Exception/claim code under IEEPA reciprocal framework; carries no duty itself but tied to struck-down IEEPA regime"},{"code":"9903.01.28","authority":"IEEPA (Reciprocal - In-Transit)","whyRefundable":"Exception/claim code under IEEPA reciprocal framework; tied to struck-down IEEPA regime"},{"code":"9903.01.29","authority":"IEEPA (Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.30","authority":"IEEPA (Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.31","authority":"IEEPA (Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.32","authority":"IEEPA (Reciprocal - Annex II)","whyRefundable":"Exception claim code under IEEPA reciprocal framework; tied to struck-down IEEPA regime"},{"code":"9903.01.33","authority":"IEEPA (Reciprocal - Section 232 exc.)","whyRefundable":"Exception claim code under IEEPA reciprocal framework; tied to struck-down IEEPA regime"},{"code":"9903.01.34","authority":"IEEPA (Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.35","authority":"IEEPA (Country-specific Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.36-62","authority":"IEEPA (Country-specific Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.63","authority":"IEEPA (China - Reciprocal)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.77","authority":"IEEPA (Brazil)","whyRefundable":"Imposed under IEEPA via EO 14323; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.83","authority":"IEEPA (Brazil exc.)","whyRefundable":"Exception claim code under IEEPA framework; tied to struck-down IEEPA regime"},{"code":"9903.01.84","authority":"IEEPA (India / Russian Oil)","whyRefundable":"Imposed under IEEPA via EO 14329; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.85","authority":"IEEPA (India-related)","whyRefundable":"Imposed under IEEPA via EO 14329 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.86","authority":"IEEPA (India-related)","whyRefundable":"Imposed under IEEPA via EO 14329 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.87","authority":"IEEPA (Russian Oil/India exc.)","whyRefundable":"Exception claim code under IEEPA framework; tied to struck-down IEEPA regime"},{"code":"9903.01.88","authority":"IEEPA (Other country-specific)","whyRefundable":"Imposed under IEEPA via relevant EO; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.01.89","authority":"IEEPA (Other country-specific)","whyRefundable":"Imposed under IEEPA via relevant EO; struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.02.01","authority":"IEEPA (Reciprocal - Expanded)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.02.02-72","authority":"IEEPA (Reciprocal - Expanded)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended Jul 31, 2025); struck down by SCOTUS (Feb 20, 2026)"},{"code":"9903.02.73","authority":"IEEPA (Reciprocal - Expanded)","whyRefundable":"Imposed under IEEPA via EO 14257 (as amended); struck down by SCOTUS (Feb 20, 2026)"}];
 
-// Normalize: remove dots, uppercase, trim. Converts "9903.81.87" → "9903818700" (10 chars, zero-padded).
+const NOT_ELIGIBLE_RAW = [{"code":"9903.03.01","authority":"Section 122","description":"10% ad valorem global surcharge (effective Feb 24, 2026 - Jul 24, 2026) on articles of any country","whyNot":"Imposed under Section 122 of Trade Act of 1974 (balance-of-payments authority); separate legal basis from IEEPA; not covered by CAPE refund process"},{"code":"9903.03.02","authority":"Section 122","description":"Exemption: Goods in transit before Feb 24, 2026 and entered before Feb 28, 2026","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.03","authority":"Section 122","description":"Exemption: Annex II product list (1,655 product codes exempt)","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.04","authority":"Section 122","description":"Exemption: Religious texts and tropical commodities","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.05","authority":"Section 122","description":"Exemption: Parts and components for civil aircraft","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.06","authority":"Section 122","description":"Exemption: Products subject to Section 232 tariffs","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.07","authority":"Section 122","description":"Exemption: USMCA-qualifying goods from Canada","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.08","authority":"Section 122","description":"Exemption: USMCA-qualifying goods from Mexico","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.09","authority":"Section 122","description":"Exemption: CAFTA-DR textile products (1,610 apparel codes)","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.10","authority":"Section 122","description":"Exemption: Donations (food, clothing, medicine) for human suffering relief","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.03.11","authority":"Section 122","description":"Exemption: Informational materials (publications, films, artworks, etc.)","whyNot":"Exemption code under Section 122; not an IEEPA duty"},{"code":"9903.45.01","authority":"Section 201","description":"Safeguard duty on large residential washers","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.45.02","authority":"Section 201","description":"Safeguard duty on large residential washers","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.45.03","authority":"Section 201","description":"Safeguard duty on solar cells/modules","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.45.04","authority":"Section 201","description":"Safeguard duty on solar cells/modules","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.45.05","authority":"Section 201","description":"Safeguard duty on solar cells/modules","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.45.06","authority":"Section 201","description":"Safeguard duty on solar cells/modules","whyNot":"Section 201 of Trade Act 1974 (safeguard authority); separate from IEEPA"},{"code":"9903.74.01","authority":"Section 232 (MHDV)","description":"Medium/heavy-duty vehicles (MHDVs) - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.02","authority":"Section 232 (MHDV)","description":"Buses and similar vehicles - 10% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.03","authority":"Section 232 (MHDV)","description":"MHDVs with U.S. content - 25% duty on non-U.S. content only","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.04","authority":"Section 232 (MHDV)","description":"MHDV-related heading (see U.S. Note 38)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.05","authority":"Section 232 (MHDV)","description":"MHDVs excluded from Section 232 duties (0% duty)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.06","authority":"Section 232 (MHDV)","description":"MHDV-related heading (see U.S. Note 38)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.07","authority":"Section 232 (MHDV)","description":"Vintage vehicles (25+ years old) - standard duty, exempt","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.08","authority":"Section 232 (MHDV)","description":"MHDV parts (subdivision i) - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.09","authority":"Section 232 (MHDV)","description":"MHDV parts (subdivision j) - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.74.10","authority":"Section 232 (MHDV)","description":"USMCA-qualifying MHDV parts (temporarily exempt)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.01","authority":"Section 232 (Lumber)","description":"Softwood timber and lumber products - additional duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.02","authority":"Section 232 (Lumber)","description":"Certain wood/lumber derivative products","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.03","authority":"Section 232 (Lumber)","description":"Completed kitchen cabinets, vanities, and parts","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.04","authority":"Section 232 (Lumber)","description":"Certain wood parts/subcomponents (0% additional duty category)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.20","authority":"Section 232 (Lumber)","description":"UK-origin wood products (10% cap)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.21","authority":"Section 232 (Lumber)","description":"Japan-origin wood products (15% cap)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.76.22","authority":"Section 232 (Lumber)","description":"EU-origin upholstered wooden furniture products (15%)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.78.01","authority":"Section 232 (Copper)","description":"Semi-finished copper - 50% duty (effective Aug 1, 2025)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.78.02","authority":"Section 232 (Copper)","description":"Intensive copper derivative products - 50% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.01","authority":"Section 232 (Semiconductors)","description":"Advanced computing chips (meeting TPP/DRAM thresholds) - 25% (effective Jan 15, 2026)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.02","authority":"Section 232 (Semiconductors)","description":"Exemption: products not meeting technical parameters","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.03","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception (US infrastructure)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.04","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.05","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.06","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.07","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.08","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.79.09","authority":"Section 232 (Semiconductors)","description":"Semiconductor end-use exception","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.80.03","authority":"Section 232 (Steel - earlier)","description":"Earlier steel derivative products heading (nails, tacks, staples, etc.)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.87","authority":"Section 232 (Steel)","description":"Iron or steel products in subdivision (j) - non-derivative steel imports","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.88","authority":"Section 232 (Steel)","description":"Iron/steel products admitted to FTZ before Mar 12, 2025 (privileged foreign status)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.89","authority":"Section 232 (Steel)","description":"Derivative iron/steel products in subdivision (l) - existing steel derivatives","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.90","authority":"Section 232 (Steel)","description":"Derivative iron/steel products in subdivision (m) - new derivatives in Ch. 73","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.91","authority":"Section 232 (Steel)","description":"Derivative iron/steel products in subdivision (n) - new derivatives outside Ch. 73 (steel content only)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.92","authority":"Section 232 (Steel)","description":"Derivative steel products processed abroad from US-melted-and-poured steel (0%)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.93","authority":"Section 232 (Steel)","description":"Derivative steel products in FTZ under privileged foreign status before Mar 12, 2025","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.94","authority":"Section 232 (Steel - UK)","description":"UK-origin iron/steel products (25% vs 50% for others)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.95","authority":"Section 232 (Steel - UK)","description":"UK-origin iron/steel products in FTZ","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.96","authority":"Section 232 (Steel - UK)","description":"UK-origin derivative iron/steel products (subdivision s)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.97","authority":"Section 232 (Steel - UK)","description":"UK-origin derivative iron/steel products (subdivision t)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.98","authority":"Section 232 (Steel - UK)","description":"UK-origin derivative iron/steel products (subdivision u)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.81.99","authority":"Section 232 (Steel - UK)","description":"UK-origin derivative iron/steel products","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.01","authority":"Section 232 (Consolidated Metals - Apr 2026)","description":"Consolidated steel/aluminum/copper tariff framework","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.02","authority":"Section 232 (Consolidated Metals - Apr 2026)","description":"Steel/aluminum/copper articles and derivatives","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.03","authority":"Section 232 (Consolidated Metals - Apr 2026)","description":"De minimis exemption (metal content <15% by weight, excluding Ch. 72-74, 76) - 0%","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.04","authority":"Section 232 (Consolidated Metals - UK)","description":"UK-origin metal articles and derivatives (95% UK-melted/smelt/cast) - 25%","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.05","authority":"Section 232 (Consolidated Metals - UK)","description":"UK-origin derivative metal articles - 15%","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.06","authority":"Section 232 (Consolidated Metals)","description":"Copper articles and derivative aluminum/steel articles","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.07","authority":"Section 232 (Consolidated Metals)","description":"Derivative aluminum/steel articles - 10% duty (temporary)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.08","authority":"Section 232 (Consolidated Metals)","description":"Derivative aluminum/steel articles - Column 1 duty (temporary)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.09","authority":"Section 232 (Consolidated Metals)","description":"Copper and derivative aluminum/steel articles - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.10","authority":"Section 232 (Consolidated Metals)","description":"Derivative aluminum/steel articles (not 95% US) - 15% duty (temporary)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.11","authority":"Section 232 (Consolidated Metals)","description":"Derivative aluminum/steel articles - Column 1 duty (temporary)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.12","authority":"Section 232 (Consolidated Metals)","description":"Derivative aluminum/steel articles from Column 2 countries - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.13","authority":"Section 232 (Consolidated Metals)","description":"Column 2 country metal articles","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.14","authority":"Section 232 (Russia)","description":"Russian-origin steel/copper/derivatives - 50% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.15","authority":"Section 232 (Russia)","description":"Russian-origin derivatives - 10% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.16","authority":"Section 232 (Russia)","description":"Russian-origin steel/copper derivatives - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.82.17","authority":"Section 232 (Russia)","description":"Russian-origin derivative products - 25% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.02","authority":"Section 232 (Aluminum)","description":"Primary aluminum products (Chapter 76 articles)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.04","authority":"Section 232 (Aluminum)","description":"Aluminum derivatives (subdivision i) - 50% on aluminum content","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.07","authority":"Section 232 (Aluminum)","description":"Derivative aluminum products - duty on declared aluminum content","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.08","authority":"Section 232 (Aluminum)","description":"Derivative aluminum products outside Chapter 76 (expanded list)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.09","authority":"Section 232 (Aluminum)","description":"Derivative aluminum products - additional list","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.12","authority":"Section 232 (Aluminum - UK)","description":"UK-origin aluminum products (25% vs 50% for others)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.13","authority":"Section 232 (Aluminum - UK)","description":"UK-origin aluminum derivatives (subdivision q)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.14","authority":"Section 232 (Aluminum - UK)","description":"UK-origin aluminum derivatives","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.15","authority":"Section 232 (Aluminum - UK)","description":"UK-origin aluminum derivatives","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.67","authority":"Section 232 (Russian Aluminum)","description":"Russian-origin aluminum products - 200% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.85.68","authority":"Section 232 (Russian Aluminum)","description":"Russian-origin aluminum derivatives - 200% duty","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.88.01","authority":"Section 301 (China)","description":"List 1 (25%) - effective Jul 6, 2018; ~$34B of Chinese goods","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.02","authority":"Section 301 (China)","description":"List 2 (25%) - effective Aug 23, 2018","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.03","authority":"Section 301 (China)","description":"List 3 (25%, originally 10%) - effective Sep 24, 2018","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.04","authority":"Section 301 (China)","description":"List 3 sub-section (automatically excluded exclusion heading)","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.09","authority":"Section 301 (China)","description":"Tranche 4 modification heading (25%)","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.15","authority":"Section 301 (China)","description":"List 4A (originally 15%, now 7.5%) - effective Sep 1, 2019","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.16","authority":"Section 301 (China)","description":"List 4B (suspended indefinitely)","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.05-08","authority":"Section 301 (China)","description":"Product exclusion headings (Lists 1-2)","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.10-14","authority":"Section 301 (China)","description":"Additional product exclusion headings","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.17-68","authority":"Section 301 (China)","description":"Various exclusion/extension headings, set headings, COVID-related exclusions","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.69","authority":"Section 301 (China)","description":"Exclusion heading (164 exclusions - U.S. notes 20(vvv)(i)-(iv)) - extended to Nov 10, 2026","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.70","authority":"Section 301 (China)","description":"Exclusion heading (14 solar manufacturing equipment exclusions - U.S. note 20(www))","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.88.71+","authority":"Section 301 (China)","description":"Additional exclusion/solar/EV/battery/ship-to-shore crane headings from 2024 review","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.90.xx","authority":"Section 301 (China - future)","description":"Reserved for Section 301 future expansion","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.91.xx","authority":"Section 301 (China - future)","description":"Reserved for Section 301 future expansion","whyNot":"Section 301 of Trade Act 1974 (unfair trade practices); not IEEPA"},{"code":"9903.94.01","authority":"Section 232 (Autos)","description":"Passenger vehicles and light trucks - 25% duty (effective Apr 3, 2025)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.02","authority":"Section 232 (Autos)","description":"Non-passenger vehicles / U.S. content of exempt USMCA vehicles - 0%","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.03","authority":"Section 232 (Autos)","description":"Non-U.S. content of USMCA-certified passenger vehicles - 25% on non-US content","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.04","authority":"Section 232 (Autos)","description":"Vehicles manufactured 25+ years prior to entry - exempt (0%)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.05","authority":"Section 232 (Auto Parts)","description":"Auto parts for passenger vehicles and light trucks - 25% (effective May 3, 2025)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.06","authority":"Section 232 (Auto Parts)","description":"USMCA-eligible auto parts (currently exempt; 0% special duty)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.07","authority":"Section 232 (Autos)","description":"Auto tariff special treatment heading","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.32","authority":"Section 232 (Autos - UK)","description":"UK-origin auto parts - 10% preferential rate","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"},{"code":"9903.94.33-54","authority":"Section 232 (Autos - Preferential)","description":"Preferential rates for UK, EU, Japan, South Korea (10-15% caps)","whyNot":"Section 232 of Trade Expansion Act 1962 (national security); not IEEPA"}];
+
+// ─── HTS helpers ──────────────────────────────────────────────────────────────
 function normalizeHTS(raw) {
   if (raw == null) return "";
-  const s = String(raw).replace(/\./g, "").trim().toUpperCase();
-  return s.padEnd(10, "0");
+  return String(raw).replace(/\./g, "").trim().toUpperCase().padEnd(10, "0");
+}
+
+function expandHTSRange(code) {
+  const dashIdx = code.lastIndexOf("-");
+  if (dashIdx === -1) return [code];
+  const startCode  = code.substring(0, dashIdx);
+  const endSuffix  = code.substring(dashIdx + 1);
+  const lastDot    = startCode.lastIndexOf(".");
+  const prefix     = startCode.substring(0, lastDot + 1);
+  const startSuffix = startCode.substring(lastDot + 1);
+  const startNum   = parseInt(startSuffix, 10);
+  const endNum     = parseInt(endSuffix, 10);
+  const padLen     = Math.max(startSuffix.length, endSuffix.length);
+  const result     = [];
+  for (let i = startNum; i <= endNum; i++) {
+    result.push(prefix + String(i).padStart(padLen, "0"));
+  }
+  return result;
+}
+
+// ─── Build eligible map: normalizedHTS → {authority, whyRefundable} ───────────
+function buildEligibleMap() {
+  const map = new Map();
+  for (const entry of ELIGIBLE_RAW) {
+    for (const code of expandHTSRange(entry.code)) {
+      map.set(normalizeHTS(code), { authority: entry.authority, whyRefundable: entry.whyRefundable });
+    }
+  }
+  return map;
+}
+
+// ─── Build not-eligible lookup (handles ranges, wildcards, + notation) ─────────
+function buildNotEligibleLookup() {
+  const exactMap   = new Map();
+  const prefixList = []; // .xx wildcards
+  const plusList   = []; // 71+ style — matches >= from within same family
+
+  for (const entry of NOT_ELIGIBLE_RAW) {
+    const code = String(entry.code || "");
+    const data = { authority: entry.authority, description: entry.description, whyNot: entry.whyNot };
+
+    if (!code.startsWith("99")) continue; // skip non-HTS entries
+
+    if (/\.xx/i.test(code)) {
+      const prefix = code.replace(/\.xx.*/i, "").replace(/\./g, "").toUpperCase();
+      prefixList.push({ prefix, ...data });
+      continue;
+    }
+
+    if (code.endsWith("+")) {
+      const fromNorm    = normalizeHTS(code.slice(0, -1));
+      const familyPrefix = fromNorm.substring(0, 6);
+      plusList.push({ from: fromNorm, familyPrefix, ...data });
+      continue;
+    }
+
+    if (code.includes("-")) {
+      for (const c of expandHTSRange(code)) {
+        exactMap.set(normalizeHTS(c), data);
+      }
+      continue;
+    }
+
+    exactMap.set(normalizeHTS(code), data);
+  }
+
+  return function lookup(norm) {
+    if (exactMap.has(norm)) return exactMap.get(norm);
+    for (const p of prefixList) {
+      if (norm.startsWith(p.prefix)) return { authority: p.authority, description: p.description, whyNot: p.whyNot };
+    }
+    for (const r of plusList) {
+      if (norm.startsWith(r.familyPrefix) && norm >= r.from) {
+        return { authority: r.authority, description: r.description, whyNot: r.whyNot };
+      }
+    }
+    return null;
+  };
 }
 
 // ─── Eligible entry types ─────────────────────────────────────────────────────
@@ -200,63 +248,78 @@ function normalizeEntryType(raw) {
 }
 
 // ─── Core calculation ─────────────────────────────────────────────────────────
-function calculate(rows) {
-  // rows: array of objects keyed by header names
-  const refundMap = new Map(); // Entry Summary Number → refund total
+function calculate(rows, eligibleMap, notEligibleLookup) {
+  const refundByEntry = new Map();
+  const sheet2Rows    = [];
+  const sheet3Rows    = [];
 
   for (const row of rows) {
-    const htsRaw    = row["HTS Number - Full"];
+    const htsRaw  = row["HTS Number - Full"];
+    const htsNorm = normalizeHTS(htsRaw);
+    const entryNum = row["Entry Summary Number"];
+
+    if (!htsNorm.startsWith("99")) continue;
+
+    if (!eligibleMap.has(htsNorm)) {
+      // Sheet 3: all non-eligible 99xx rows, no other conditions
+      const info = notEligibleLookup(htsNorm);
+      const fallback = "Not found in eligibility reference";
+      sheet3Rows.push([
+        entryNum,
+        htsRaw,
+        info ? info.authority    : fallback,
+        info ? info.description  : fallback,
+        info ? info.whyNot       : fallback,
+      ]);
+      continue;
+    }
+
+    // Sheet 1 & 2: apply remaining conditions
     const goodsVal  = Number(row["Line Tariff Goods Value Amount"]);
     const dutyAmt   = Number(row["Line Tariff Duty Amount"]);
     const entryType = normalizeEntryType(row["Entry Type Code"]);
-    const entryNum  = row["Entry Summary Number"];
 
-    // Condition 4: Entry Type must be 01, 21, or 31
     if (!ELIGIBLE_ENTRY_TYPES.has(entryType)) continue;
-
-    // Condition 2: Goods Value must be exactly 0
     if (goodsVal !== 0) continue;
-
-    // Condition 3: Duty Amount must be > 0
     if (!(dutyAmt > 0)) continue;
 
-    // Condition 1: HTS starts with "99" and is not in the excluded list
-    const htsNorm = normalizeHTS(htsRaw);
-    if (!htsNorm.startsWith("99")) continue;
-    if (EXCLUDED_HTS.has(htsNorm)) continue;
-
-    // This row qualifies — add duty to the entry's refund total
-    const prev = refundMap.get(entryNum) || 0;
-    refundMap.set(entryNum, prev + dutyAmt);
+    const info = eligibleMap.get(htsNorm);
+    refundByEntry.set(entryNum, (refundByEntry.get(entryNum) || 0) + dutyAmt);
+    sheet2Rows.push([
+      entryNum,
+      parseFloat(dutyAmt.toFixed(2)),
+      htsRaw,
+      info.authority,
+      info.whyRefundable,
+    ]);
   }
 
-  return refundMap;
+  return { refundByEntry, sheet2Rows, sheet3Rows };
 }
 
-// ─── CSV builder ──────────────────────────────────────────────────────────────
-function buildCSV(refundMap) {
-  const lines = ["Entry Summary Number,Refund"];
-  for (const [entryNum, refund] of refundMap.entries()) {
-    // Quote entry number in case it contains commas
-    const safeNum = `"${String(entryNum).replace(/"/g, '""')}"`;
-    lines.push(`${safeNum},${refund.toFixed(2)}`);
+// ─── Build Excel workbook ─────────────────────────────────────────────────────
+function buildWorkbook(refundByEntry, sheet2Rows, sheet3Rows) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1 — Refund Summary (one row per entry)
+  const s1 = [["Entry Summary Number", "Refund"]];
+  for (const [entryNum, total] of refundByEntry.entries()) {
+    s1.push([entryNum, parseFloat(total.toFixed(2))]);
   }
-  return lines.join("\r\n");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s1), "Refund Summary");
+
+  // Sheet 2 — Refund Line Detail
+  const s2 = [["Entry Summary Number", "Refund", "HTS Number - Full", "Authority", "Why Refundable"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s2.concat(sheet2Rows)), "Refund Line Detail");
+
+  // Sheet 3 — Non-Refundable Lines
+  const s3 = [["Entry Summary Number", "HTS Number - Full", "Authority", "Product / Description", "Why NOT Refundable"]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s3.concat(sheet3Rows)), "Non-Refundable Lines");
+
+  return wb;
 }
 
-function triggerDownload(csv, filename) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement("a");
-  a.href     = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
-// ─── UI wiring ────────────────────────────────────────────────────────────────
+// ─── UI ───────────────────────────────────────────────────────────────────────
 const dropZone   = document.getElementById("dropZone");
 const fileInput  = document.getElementById("fileInput");
 const fileChosen = document.getElementById("fileChosen");
@@ -264,23 +327,18 @@ const processBtn = document.getElementById("processBtn");
 const statusBox  = document.getElementById("statusBox");
 
 let selectedFile = null;
-let lastCSV      = null;
-let lastFilename  = null;
 
 function setFile(file) {
   if (!file) return;
   selectedFile = file;
-  fileChosen.textContent = `Selected: ${file.name}`;
+  fileChosen.textContent = "Selected: " + file.name;
   processBtn.disabled = false;
   clearStatus();
 }
 
 fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
 
-dropZone.addEventListener("dragover", (e) => {
-  e.preventDefault();
-  dropZone.classList.add("dragover");
-});
+dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("dragover"); });
 dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
 dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
@@ -290,18 +348,14 @@ dropZone.addEventListener("drop", (e) => {
 });
 
 function showStatus(type, html) {
-  statusBox.className = `status ${type}`;
+  statusBox.className = "status " + type;
   statusBox.style.display = "block";
   statusBox.innerHTML = html;
 }
-function clearStatus() {
-  statusBox.style.display = "none";
-  statusBox.innerHTML = "";
-}
+function clearStatus() { statusBox.style.display = "none"; statusBox.innerHTML = ""; }
 
 processBtn.addEventListener("click", () => {
   if (!selectedFile) return;
-
   showStatus("info", "Processing file…");
   processBtn.disabled = true;
 
@@ -319,46 +373,37 @@ processBtn.addEventListener("click", () => {
         return;
       }
 
-      // Validate required columns exist
-      const required = [
-        "Entry Summary Number","Entry Type Code","HTS Number - Full",
-        "Line Tariff Goods Value Amount","Line Tariff Duty Amount"
-      ];
-      const headers = Object.keys(rows[0]);
-      const missing = required.filter(h => !headers.includes(h));
+      const required = ["Entry Summary Number", "Entry Type Code", "HTS Number - Full",
+                        "Line Tariff Goods Value Amount", "Line Tariff Duty Amount"];
+      const missing = required.filter(h => !(h in rows[0]));
       if (missing.length > 0) {
-        showStatus("error", `Missing required columns:<br><b>${missing.join(", ")}</b>`);
+        showStatus("error", "Missing required columns:<br><b>" + missing.join(", ") + "</b>");
         processBtn.disabled = false;
         return;
       }
 
-      const refundMap = calculate(rows);
-      const csv       = buildCSV(refundMap);
+      const eligibleMap       = buildEligibleMap();
+      const notEligibleLookup = buildNotEligibleLookup();
+      const { refundByEntry, sheet2Rows, sheet3Rows } = calculate(rows, eligibleMap, notEligibleLookup);
+      const outWb             = buildWorkbook(refundByEntry, sheet2Rows, sheet3Rows);
 
-      const baseName  = selectedFile.name.replace(/\.[^.]+$/, "");
-      lastFilename    = `${baseName}_Refunds.csv`;
-      lastCSV         = csv;
+      const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
+      XLSX.writeFile(outWb, baseName + "_Refund_Analysis.xlsx");
 
-      const entryCount  = refundMap.size;
-      const totalRefund = [...refundMap.values()].reduce((a, b) => a + b, 0);
+      const totalRefund = [...refundByEntry.values()].reduce((a, b) => a + b, 0);
 
-      showStatus("success", `
-        <strong>Calculation complete.</strong><br>
-        <div class="summary-stats">
-          Eligible entries: <b>${entryCount}</b> &nbsp;|&nbsp;
-          Total refund: <b>$${totalRefund.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</b>
-        </div>
-        <button class="download-btn" id="dlBtn">⬇ Download CSV</button>
-      `);
-
-      document.getElementById("dlBtn").addEventListener("click", () => {
-        triggerDownload(lastCSV, lastFilename);
-      });
+      showStatus("success",
+        "<strong>Done! File download has started.</strong>" +
+        "<div class='summary-stats'>" +
+        "Eligible entries: <b>" + refundByEntry.size + "</b> &nbsp;|&nbsp;" +
+        "Total refund: <b>$" + totalRefund.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "</b> &nbsp;|&nbsp;" +
+        "Non-refundable lines: <b>" + sheet3Rows.length + "</b>" +
+        "</div>"
+      );
 
     } catch (err) {
-      showStatus("error", `Failed to process file: ${err.message}`);
+      showStatus("error", "Failed to process file: " + err.message);
     }
-
     processBtn.disabled = false;
   };
 
