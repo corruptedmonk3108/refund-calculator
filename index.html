@@ -239,6 +239,13 @@ function buildNotEligibleLookup() {
   };
 }
 
+// ─── Number parsing (handles plain numbers and currency strings like "$1,234.56") ──
+function parseAmount(raw) {
+  if (raw == null) return NaN;
+  if (typeof raw === "number") return raw;
+  return parseFloat(String(raw).replace(/[$,]/g, "").trim());
+}
+
 // ─── Eligible entry types ─────────────────────────────────────────────────────
 const ELIGIBLE_ENTRY_TYPES = new Set(["01", "21", "31"]);
 
@@ -275,8 +282,8 @@ function calculate(rows, eligibleMap, notEligibleLookup) {
     }
 
     // Sheet 1 & 2: apply remaining conditions
-    const goodsVal  = Number(row["Line Tariff Goods Value Amount"]);
-    const dutyAmt   = Number(row["Line Tariff Duty Amount"]);
+    const goodsVal  = parseAmount(row["Line Tariff Goods Value Amount"]);
+    const dutyAmt   = parseAmount(row["Line Tariff Duty Amount"]);
     const entryType = normalizeEntryType(row["Entry Type Code"]);
 
     if (!ELIGIBLE_ENTRY_TYPES.has(entryType)) continue;
