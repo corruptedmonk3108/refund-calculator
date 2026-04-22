@@ -397,6 +397,18 @@ processBtn.addEventListener("click", () => {
       const baseName = selectedFile.name.replace(/\.[^.]+$/, "");
       XLSX.writeFile(outWb, baseName + "_Refund_Analysis.xlsx");
 
+      // Also download a CSV of just the entry numbers
+      const csvLines = ["Entry Number", ...[...refundByEntry.keys()].map(n => `"${String(n).replace(/"/g, '""')}"`)];
+      const csvBlob = new Blob([csvLines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const csvUrl = URL.createObjectURL(csvBlob);
+      const csvA = document.createElement("a");
+      csvA.href = csvUrl;
+      csvA.download = baseName + "_Entry_Numbers.csv";
+      document.body.appendChild(csvA);
+      csvA.click();
+      document.body.removeChild(csvA);
+      setTimeout(() => URL.revokeObjectURL(csvUrl), 2000);
+
       const totalRefund = [...refundByEntry.values()].reduce((a, b) => a + b, 0);
 
       showStatus("success",
