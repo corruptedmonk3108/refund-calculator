@@ -380,7 +380,14 @@ processBtn.addEventListener("click", () => {
   reader.onload = (e) => {
     try {
       const data = new Uint8Array(e.target.result);
-      const wb   = XLSX.read(data, { type: "array" });
+      const readOpts = { type: "array" };
+      if (selectedFile.name.toLowerCase().endsWith(".csv")) {
+        const firstLine = new TextDecoder().decode(data.slice(0, 2000)).split(/\r?\n/)[0];
+        const semicolons = (firstLine.match(/;/g) || []).length;
+        const commas     = (firstLine.match(/,/g) || []).length;
+        if (semicolons > commas) readOpts.FS = ";";
+      }
+      const wb   = XLSX.read(data, readOpts);
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
 
