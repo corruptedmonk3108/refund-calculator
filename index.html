@@ -247,7 +247,7 @@ function parseAmount(raw) {
 }
 
 // ─── Eligible entry types ─────────────────────────────────────────────────────
-const ELIGIBLE_ENTRY_TYPES = new Set(["01", "21", "31"]);
+const ELIGIBLE_ENTRY_TYPES = new Set(["01", "11", "21", "31"]);
 
 function normalizeEntryType(raw) {
   if (raw == null) return "";
