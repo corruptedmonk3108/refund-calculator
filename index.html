@@ -390,13 +390,7 @@ processBtn.addEventListener("click", () => {
       const wb   = XLSX.read(data, readOpts);
       const ws   = wb.Sheets[wb.SheetNames[0]];
       const isCSV = selectedFile.name.toLowerCase().endsWith(".csv");
-      const rawRows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: !isCSV });
-      const rows = rawRows.map(row => {
-        const out = {};
-        for (const [k, v] of Object.entries(row))
-          out[k.replace(/[\r\n]+/g, " ").trim()] = v;
-        return out;
-      });
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: !isCSV });
 
       if (rows.length === 0) {
         showStatus("error", "The file appears to be empty or has no data rows.");
