@@ -389,6 +389,18 @@ processBtn.addEventListener("click", () => {
       }
       const wb   = XLSX.read(data, readOpts);
       const ws   = wb.Sheets[wb.SheetNames[0]];
+      // Expand declared range to include all actual cells (fixes Excel files
+      // where the used-range header stops short of the real data columns)
+      if (ws['!ref']) {
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (const addr of Object.keys(ws)) {
+          if (addr[0] === '!') continue;
+          const cell = XLSX.utils.decode_cell(addr);
+          if (cell.c > range.e.c) range.e.c = cell.c;
+          if (cell.r > range.e.r) range.e.r = cell.r;
+        }
+        ws['!ref'] = XLSX.utils.encode_range(range);
+      }
       const isCSV = selectedFile.name.toLowerCase().endsWith(".csv");
       const rows = XLSX.utils.sheet_to_json(ws, { defval: null, raw: !isCSV });
 
